@@ -844,10 +844,22 @@ function enter(n,p,rc,silent){
     r.members[n]||{},{layout:myLayout()});
   saveRoom(r);startSync();render();
   if(!silent)toast('입장 · '+n);return true;}
-$('#doLogin').onclick=()=>{const n=$('#inName').value.trim(),p=$('#inPin').value.trim(),rc=$('#inRoom').value.trim();
+$('#doLogin').onclick=async()=>{
+  const n=$('#inName').value.trim(), p=$('#inPin').value.trim(), rc=$('#inRoom').value.trim();
   if(!n)return toast('닉네임을 입력하세요');
   if(p.length>0&&p.length!==4)return toast('PIN은 4자리이거나 비워두세요');
-  if(enter(n,p,rc))closeAll();};
+  
+  $('#doLogin').textContent = '데이터 불러오는 중...';
+  
+  // 방 코드를 덮어쓰기 전에 서버 데이터 먼저 가져오기
+  room = (rc || room).toUpperCase();
+  await pullRemote(); 
+  
+  if(enter(n,p,rc)) { 
+    closeAll(); 
+  }
+  $('#doLogin').textContent = '입장';
+};
 
 /* ══════ 다수안 ══════ */
 $('#btnConsensus').onclick=()=>{
