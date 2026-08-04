@@ -305,14 +305,11 @@ function init(){
 function loadRoom(){try{return JSON.parse(localStorage.getItem(RK()))||{trip:TRIP,plan:null,members:{},thr:2,v:0};}
   catch(e){return{trip:TRIP,plan:null,members:{},thr:2,v:0};}}
 
-/* ══════ 동기화 ══════ */
-const SYNC={
-  mode:'supabase', // kvdb에서 supabase로 변경 (필수는 아니지만 명확히 하기 위해)
-  kvdbBucket:'',
-  supabaseUrl:'https://qycgdqeftpvplkvyoooj.supabase.co',
-  supabaseKey:'sb_publishable_YCNfqgoGy7tPw-_V-2SbdQ_Oa8IiWdF'
-};
-let sb=null,lastPushed='',pollTimer=null,pushT=null;
+/* ══════ 동기화 (Supabase) ══════ */
+/* ▼▼▼ Supabase 프로젝트 설정: Project Settings → API 에서 URL / publishable key 복사해서 채우세요 ▼▼▼ */
+const SYNC={mode:'supabase',supabaseUrl:'https://YOUR-PROJECT-REF.supabase.co',supabaseKey:'YOUR-PUBLISHABLE-KEY'};
+/* ▲▲▲ ------------------------------------------------------------------------------------- ▲▲▲ */
+let sb=null,sbPromise=null,sbChannel=null,sbChannelRoom=null,lastPushed='',pollTimer=null,pushT=null;
 const bc='BroadcastChannel'in window?new BroadcastChannel('triptable'):null;
 if(bc)bc.onmessage=e=>{if(e.data.room===room)pullLocal();};
 window.addEventListener('storage',e=>{if(e.key===RK())pullLocal();});
@@ -320,30 +317,57 @@ function flashLive(t){const b=$('#liveBadge');b.innerHTML='<i class="dotlive"></
   clearTimeout(flashLive.t);flashLive.t=setTimeout(()=>b.innerHTML='<i class="dotlive"></i>자동저장',1400);}
 function pullLocal(){applyRoomToEV();render();flashLive('업데이트');}
 function saveRoom(r){r.v=Date.now();localStorage.setItem(RK(),JSON.stringify(r));bc&&bc.postMessage({room});pushRemote(r);}
+
+/* Supabase 클라이언트를 한 번만 로드하고, 로드 중이든 완료됐든 항상 같은 Promise를 돌려줌.
+   push/pull 어느 쪽이 먼저 불려도 클라이언트가 준비될 때까지 기다렸다가 실행되므로 경합(race condition)이 없음. */
+function ensureSb(){
+  if(sbPromise)return sbPromise;
+  if(!SYNC.supabaseUrl||!SYNC.supabaseKey||SYNC.supabaseUrl.indexOf('YOUR-PROJECT')!==-1){
+    sbPromise=Promise.resolve(null);return sbPromise;
+  }
+  sbPromise=new Promise(resolve=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+    s.onload=()=>{sb=supabase.createClient(SYNC.supabaseUrl,SYNC.supabaseKey);resolve(sb);};
+    s.onerror=()=>{console.error('[sync] supabase-js 스크립트 로드 실패 — 네트워크 확인');resolve(null);};
+    document.head.appendChild(s);
+  });
+  return sbPromise;
+}
+function subscribeRoom(){
+  if(!sb||sbChannelRoom===room)return;
+  if(sbChannel)sb.removeChannel(sbChannel);
+  sbChannel=sb.channel('room-'+room).on('postgres_changes',{event:'*',schema:'public',table:'trip_rooms',filter:'code=eq.'+room},
+    p=>{localStorage.setItem(RK(),JSON.stringify(p.new.data));lastPushed=JSON.stringify(p.new.data);pullLocal();}).subscribe();
+  sbChannelRoom=room;
+}
 function pushRemote(r){clearTimeout(pushT);pushT=setTimeout(async()=>{
   const body=JSON.stringify(r);if(body===lastPushed)return;lastPushed=body;
   try{
-    if(SYNC.supabaseUrl&&sb)await sb.from('trip_rooms').upsert({code:room,data:r});
-    else if(SYNC.mode==='kvdb')await fetch(`https://kvdb.io/${SYNC.kvdbBucket}/${encodeURIComponent(room)}`,{method:'PUT',body});
+    const client=await ensureSb();if(!client)return;
+    const{error}=await client.from('trip_rooms').upsert({code:room,data:r});
+    if(error)throw error;
     flashLive('동기화됨');
-  }catch(e){flashLive('오프라인');}},600);}
-async function pullRemote(){try{
-  let data=null;
-  if(SYNC.supabaseUrl&&sb){const{data:d}=await sb.from('trip_rooms').select('data').eq('code',room).single();data=d&&d.data;}
-  else if(SYNC.mode==='kvdb'){const res=await fetch(`https://kvdb.io/${SYNC.kvdbBucket}/${encodeURIComponent(room)}`,{cache:'no-store'});
-    if(res.ok)data=JSON.parse(await res.text());}
-  if(!data)return;const local=loadRoom();
-  if((data.v||0)>(local.v||0)){localStorage.setItem(RK(),JSON.stringify(data));lastPushed=JSON.stringify(data);pullLocal();}
-}catch(e){}}
-function startSync(){
-  if(SYNC.supabaseUrl&&SYNC.supabaseKey&&!sb){const s=document.createElement('script');
-    s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
-    s.onload=()=>{sb=supabase.createClient(SYNC.supabaseUrl,SYNC.supabaseKey);
-      sb.channel('room-'+room).on('postgres_changes',{event:'*',schema:'public',table:'trip_rooms',filter:'code=eq.'+room},
-        p=>{localStorage.setItem(RK(),JSON.stringify(p.new.data));pullLocal();}).subscribe();pullRemote();};
-    document.head.appendChild(s);}
-  clearInterval(pollTimer);pollTimer=setInterval(pullRemote,3000);pullRemote();
-  $('#syncInfo').innerHTML=`기기 간 동기화: <b>${SYNC.supabaseUrl?'Supabase':'kvdb.io 릴레이'}</b> · 방 코드 <b>${room}</b>`;
+  }catch(e){flashLive('오프라인');console.error('[sync] push 실패:',e);}},600);}
+async function pullRemote(){
+  try{
+    const client=await ensureSb();if(!client)return;
+    const{data:d,error}=await client.from('trip_rooms').select('data').eq('code',room).single();
+    if(error&&error.code!=='PGRST116'){console.error('[sync] pull 실패:',error);return;} // PGRST116 = 방 데이터 아직 없음(정상)
+    const data=d&&d.data;
+    if(!data)return;
+    const local=loadRoom();
+    if((data.v||0)>(local.v||0)){localStorage.setItem(RK(),JSON.stringify(data));lastPushed=JSON.stringify(data);pullLocal();}
+  }catch(e){console.error('[sync] pull 예외:',e);}
+}
+async function startSync(){
+  const client=await ensureSb();
+  if(client)subscribeRoom();
+  clearInterval(pollTimer);pollTimer=setInterval(pullRemote,3000);
+  await pullRemote();
+  $('#syncInfo').innerHTML=client
+    ?`기기 간 동기화: <b>Supabase</b> (실시간) · 방 코드 <b>${room}</b>`
+    :(SYNC.supabaseUrl.indexOf('YOUR-PROJECT')===-1?`⚠️ Supabase 연결 실패 — 콘솔을 확인하세요.`:`⚠️ 코드 상단 SYNC.supabaseUrl / supabaseKey를 채워주세요.`);
 }
 
 function applyRoomToEV(){
@@ -838,8 +862,13 @@ $('#doDelAcc').onclick=()=>{
   $('#whoBadge').textContent='게스트';$('#logoutRow').style.display='none';
   $('#inName').value='';$('#inPin').value='';closeAll();init();render();toast('계정이 삭제되었습니다');
 };
-function enter(n,p,rc,silent){
-  room=(rc||room).toUpperCase();const r=loadRoom();
+async function enter(n,p,rc,silent){
+  room=(rc||room).toUpperCase();
+  // 이 기기에 처음 들어오는 방이면(로컬에 데이터가 없으면) 기본값을 만들기 전에
+  // 서버에 이미 있는 데이터를 먼저 받아온다 — 안 그러면 새 기기의 빈 기본값이
+  // "최신"으로 서버에 덮어써져서 다른 사람들의 일정이 날아갈 수 있음.
+  await pullRemote();
+  const r=loadRoom();
   if(r.members[n]&&r.members[n].pin&&r.members[n].pin!==p){toast('PIN이 다릅니다');return false;}
   me={name:n,pin:p};peek=null;$('#whoBadge').textContent=n;
   localStorage.setItem(SESSK,JSON.stringify({name:n,pin:p,room}));
@@ -849,22 +878,10 @@ function enter(n,p,rc,silent){
     r.members[n]||{},{layout:myLayout()});
   saveRoom(r);startSync();render();
   if(!silent)toast('입장 · '+n);return true;}
-$('#doLogin').onclick=async()=>{
-  const n=$('#inName').value.trim(), p=$('#inPin').value.trim(), rc=$('#inRoom').value.trim();
+$('#doLogin').onclick=async()=>{const n=$('#inName').value.trim(),p=$('#inPin').value.trim(),rc=$('#inRoom').value.trim();
   if(!n)return toast('닉네임을 입력하세요');
   if(p.length>0&&p.length!==4)return toast('PIN은 4자리이거나 비워두세요');
-  
-  $('#doLogin').textContent = '데이터 불러오는 중...';
-  
-  // 방 코드를 덮어쓰기 전에 서버 데이터 먼저 가져오기
-  room = (rc || room).toUpperCase();
-  await pullRemote(); 
-  
-  if(enter(n,p,rc)) { 
-    closeAll(); 
-  }
-  $('#doLogin').textContent = '입장';
-};
+  if(await enter(n,p,rc))closeAll();};
 
 /* ══════ 다수안 ══════ */
 $('#btnConsensus').onclick=()=>{
@@ -909,8 +926,8 @@ function closeAll(){document.querySelectorAll('.mask').forEach(m=>m.classList.re
 document.querySelectorAll('.mask').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)closeAll();}));
 
 init();
-(function boot(){try{const s=JSON.parse(localStorage.getItem(SESSK)||'null');
-  if(s&&s.name){enter(s.name,s.pin,s.room,true);return;}}catch(e){}
+(async function boot(){try{const s=JSON.parse(localStorage.getItem(SESSK)||'null');
+  if(s&&s.name){await enter(s.name,s.pin,s.room,true);return;}}catch(e){}
   startSync();render();})();
 </script>
 </body>
