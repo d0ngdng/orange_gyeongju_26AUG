@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>경주 3박4일 · TripTable</title>
+<!-- 📷 이미지 저장을 위한 html2canvas 라이브러리 로드 -->
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <style>
 :root{
   --bg:#f4f5f7; --card:#fff; --line:#e3e5e9; --txt:#1c1d21; --sub:#7c8290;
@@ -71,8 +73,6 @@ button.gh{background:#fff;border:1px solid var(--line)}
 .blk .vt{position:absolute;bottom:2px;right:3px;font-size:9.5px;background:rgba(0,0,0,.28);padding:0 4px;border-radius:99px}
 .blk.dragging{opacity:.9;z-index:99;box-shadow:0 8px 20px rgba(0,0,0,.35)}
 .blk.locked{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.14) 0 6px,transparent 6px 12px)}
-.ghost{position:absolute;border-radius:7px;border:2px dashed;background:transparent;font-size:9px;
-  font-weight:700;padding:1px 3px;opacity:.8;pointer-events:none;overflow:hidden;z-index:2}
 
 .fx{font-size:9px;font-weight:600;margin-left:4px;opacity:.85}
 .fx.on{color:#ffdad6;font-weight:900;opacity:1}
@@ -129,6 +129,7 @@ textarea{min-height:60px;resize:vertical;line-height:1.5}
     <h1 id="tripName">🏯 경주 08.18–08.21</h1>
     <span class="badge" id="whoBadge">게스트</span>
     <span class="badge" id="liveBadge"><i class="dotlive"></i>자동저장</span>
+    <button id="btnImg">📷 이미지</button>
     <button id="btnLogin">내 시간표</button>
     <button id="btnVote">투표</button>
     <button id="btnAdmin">관리</button>
@@ -142,8 +143,7 @@ textarea{min-height:60px;resize:vertical;line-height:1.5}
   <div class="tt"><div class="ttbody" id="ttbody"></div></div>
   <div class="hint">
     · 블록 <b>탭</b>=편집 · <b>길게 눌러</b> 드래그=이동<br>
-    · 제목 옆 <b style="color:var(--fix)">날짜/시간</b>(붉은체)=고정, 회색=자유<br>
-    · 변경은 <b>자동 저장·동기화</b>됩니다.
+    · 상단의 <b style="color:var(--accent)">사람 이름</b>을 탭하면 그 사람의 시간표 시점으로 전환됩니다.
   </div>
 </div>
 
@@ -165,7 +165,10 @@ textarea{min-height:60px;resize:vertical;line-height:1.5}
     <div><label>PIN 4자리 (선택)</label><input id="inPin" type="tel" maxlength="4" placeholder="비워두면 암호 없음"></div>
   </div>
   <div class="acts"><button onclick="closeAll()">닫기</button><button class="pri" id="doLogin">입장</button></div>
-  <div class="acts" id="logoutRow" style="display:none"><button id="doLogout">로그아웃 / 계정 전환</button></div>
+  <div class="acts" id="logoutRow" style="display:none">
+    <button id="doLogout" class="gh">로그아웃</button>
+    <button id="doDelete" style="background:#fff;border:1px solid var(--fix);color:var(--fix)">계정 삭제</button>
+  </div>
   <div class="hint" id="syncInfo"></div>
 </div></div>
 
@@ -249,7 +252,9 @@ textarea{min-height:60px;resize:vertical;line-height:1.5}
 <script>
 let TRIP='🏯 경주 08.18–08.21';
 const DAYS=['8/18 화','8/19 수','8/20 목','8/21 금'];
-const H0=7,H1=24,STEP=0.25,SLOTS=(H1-H0)/STEP,PX=13;
+
+// 🔥 시간 범위 조정 (05:00 ~ 26:00)
+const H0=5,H1=26,STEP=0.25,SLOTS=(H1-H0)/STEP,PX=13;
 const ADMIN_PIN='1234';
 const COLORS=['#c2410c','#2f6fe8','#1aa179','#b8860b','#7b4de8','#d63f8f','#3aa0c4','#6b7b2f','#a13b3b','#444b5a'];
 const DURS=[0.25,0.5,0.75,1,1.25,1.5,1.75,2,2.5,3,3.5,4,5,6,8];
@@ -270,11 +275,19 @@ let SEED=[
  {t:'KTX 경주→대전',p:'신경주역',m:'',type:'fixed',d:3,s:17,dur:1.25},
 ];
 
-let EV=[],me=null,room='GYEONGJU2608',isAdmin=false,show=new Set(),cur=null,edColor=null;
+let EV=[],me=null,room='GYEONGJU2608',isAdmin=false,cur=null,edColor=null;
+let viewingUser = null; // 타인의 시간표를 볼 때 사용
 let viewDay=null;
+
 const $=s=>document.querySelector(s);
 const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),1500);};
-const hhmm=h=>{const H=Math.floor(h+1e-9),M=Math.round((h-H)*60);return String(H).padStart(2,'0')+':'+String(M).padStart(2,'0');};
+
+// 🔥 24시 이상일 때 00시, 01시로 포맷팅
+const hhmm=h=>{
+  const H=Math.floor(h+1e-9),M=Math.round((h-H)*60);
+  const dH = H >= 24 ? H - 24 : H;
+  return String(dH).padStart(2,'0')+':'+String(M).padStart(2,'0');
+};
 const esc=s=>(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const RK=()=>'ttroom_'+room, SESSK='tt_session';
 const visDays=()=>viewDay==null?DAYS.map((_,i)=>i):[viewDay];
@@ -355,7 +368,7 @@ function applyRoomToEV(){
       if(!e)EV.push(JSON.parse(JSON.stringify(p)));
       else{
         e.title=p.title;e.type=p.type;e.place=p.place;e.memo=p.memo;e.dur=e.dur||p.dur;
-        e.locked=(p.type==='fixed'); // 잠금 상태 동기화 누락 버그 픽스
+        e.locked=(p.type==='fixed');
         if(p.type==='fixed'){e.day=p.day;e.start=p.start;e.dur=p.dur;}
       }
     });
@@ -400,7 +413,7 @@ function consensus(id){const t={};let total=0;
   return{total,best:b?{day:+b[0].split('@')[0],start:+b[0].split('@')[1],n:b[1]}:null};}
 function votes(id){return Object.values(allMembers()).filter(m=>(m.votes||[]).includes(id)).length;}
 
-function fixTag(e,inSheet){
+function fixTag(e){
   const dFix=e.type==='fixed'||e.type==='date', tFix=e.type==='fixed';
   return `<span class="fx ${dFix?'on':''}">${dFix?'<b>날짜</b>':'날짜'}</span>`+
          `<span class="fx ${tFix?'on':''}">${tFix?'<b>시간</b>':'시간'}</span>`;
@@ -411,13 +424,97 @@ function extractDateStr(dayIndex) {
   return match ? `${match[1]}일` : '';
 }
 
+// 🔥 이미지 캡처 (블록이 있는 영역만 똑똑하게 크롭)
+$('#btnImg').onclick = async () => {
+  if(typeof html2canvas === 'undefined') return toast('로딩 중입니다. 잠시 후 다시 시도하세요.');
+  toast('이미지 생성 중... (잠시 멈출 수 있습니다)');
+  
+  const ms = allMembers(), names = Object.keys(ms);
+  const targetName = viewingUser || (me ? me.name : (names.length ? names[0] : null));
+  const targetLayout = targetName && ms[targetName] ? (ms[targetName].layout || []) : [];
+  
+  let minStart = H1, maxEnd = H0, hasEvent = false;
+  EV.forEach(e => {
+    let s = e.start, d = e.dur;
+    if(targetName) {
+        const l = targetLayout.find(x => x.id === e.id);
+        if(l && l.start != null) { s = l.start; d = l.dur || d; } else s = null;
+    }
+    if(s != null && (viewDay == null || e.day === viewDay)) {
+        minStart = Math.min(minStart, s);
+        maxEnd = Math.max(maxEnd, s + d);
+        hasEvent = true;
+    }
+  });
+  
+  if(!hasEvent) { minStart = 9; maxEnd = 18; }
+  else { minStart = Math.max(H0, minStart - 0.5); maxEnd = Math.min(H1, maxEnd + 0.5); }
+  
+  const cropTop = idx(minStart) * PX;
+  const cropHeight = (maxEnd - minStart) / STEP * PX;
+  
+  const wrapClone = document.createElement('div');
+  wrapClone.style.position = 'absolute';
+  wrapClone.style.left = '-9999px';
+  wrapClone.style.top = '0';
+  wrapClone.style.background = 'var(--bg)';
+  wrapClone.style.padding = '16px';
+  wrapClone.style.width = $('#topbar').clientWidth + 'px'; // 화면 너비에 맞춤
+  
+  const titleEl = document.createElement('h2');
+  titleEl.style.margin = '0 0 10px 0';
+  titleEl.style.fontSize = '18px';
+  titleEl.style.color = '#1c1d21';
+  titleEl.textContent = TRIP + (targetName ? ` (${targetName}님의 일정)` : '');
+  wrapClone.appendChild(titleEl);
+  
+  const theadClone = $('#tthead').cloneNode(true);
+  theadClone.style.borderTop = '1px solid var(--line)';
+  theadClone.style.background = '#fff';
+  theadClone.style.borderRadius = '12px 12px 0 0';
+  wrapClone.appendChild(theadClone);
+  
+  const ttClone = $('.tt').cloneNode(true);
+  ttClone.style.height = `${cropHeight}px`;
+  ttClone.style.border = '1px solid var(--line)';
+  ttClone.style.borderRadius = '0 0 12px 12px';
+  ttClone.style.borderTop = '0';
+  
+  const ttbodyClone = ttClone.querySelector('.ttbody');
+  ttbodyClone.style.transform = `translateY(-${cropTop}px)`;
+  wrapClone.appendChild(ttClone);
+  
+  document.body.appendChild(wrapClone);
+  
+  try {
+    const canvas = await html2canvas(wrapClone, { scale: 2, backgroundColor: '#f4f5f7' });
+    const link = document.createElement('a');
+    link.download = `TripTable_${targetName || '전체'}.png`;
+    link.href = canvas.toDataURL();
+    link.click();
+  } catch(e) {
+    toast('이미지 저장에 실패했습니다.');
+  } finally {
+    wrapClone.remove();
+  }
+};
+
+
 function render(){
   const r=loadRoom();if(r.trip)TRIP=r.trip;$('#tripName').textContent=TRIP;
 
   const ms=allMembers(),names=Object.keys(ms);
-  $('#members').innerHTML=names.length?names.map(n=>{const c=ms[n].color||'#888',a=show.has(n);
-    return `<div class="mchip ${a?'act':''}" style="border-color:${c};${a?'background:'+c:''}" onclick="tgl('${n}')">${me&&n===me.name?'⭐ ':''}${esc(n)}</div>`;
-  }).join(''):'<div class="empty">참여자 없음 · “내 시간표”로 입장</div>';
+  
+  // 🔥 타인 조회 모드 로직 완전히 교체
+  const targetName = viewingUser || (me ? me.name : (names.length ? names[0] : null));
+  const isMine = (!viewingUser || (me && viewingUser === me.name));
+  const targetLayout = targetName && ms[targetName] ? (ms[targetName].layout || []) : [];
+
+  $('#members').innerHTML = names.length ? names.map(n => {
+    const c = ms[n].color || '#888';
+    const act = (targetName === n);
+    return `<div class="mchip ${act?'act':''}" style="border-color:${c};${act?'background:'+c:''}" onclick="tgl('${n}')">${me&&n===me.name?'⭐ ':''}${esc(n)}</div>`;
+  }).join('') : '<div class="empty">참여자 없음 · “내 시간표”로 입장</div>';
 
   $('#viewbar').innerHTML='<span class="lb">보기</span>'+
     `<div class="vtab ${viewDay==null?'act':''}" onclick="setView(null)">전체</div>`+
@@ -433,16 +530,22 @@ function render(){
   g+=vd.map(d=>`<div class="daycol" data-d="${d}" id="col${d}" style="height:${SLOTS*PX}px"></div>`).join('');
   $('#ttbody').innerHTML=g;
 
-  [...show].forEach((n,k)=>{const m=ms[n];if(!m||(me&&n===me.name))return;
-    (m.layout||[]).forEach(l=>{if(l.start==null)return;const ref=EV.find(e=>e.id===l.id);if(!ref)return;
-      const col=$('#col'+l.day);if(!col)return;
-      const gh=document.createElement('div');gh.className='ghost';
-      gh.style.borderColor=m.color;gh.style.color=m.color;
-      gh.style.top=(idx(l.start)*PX)+'px';gh.style.height=((l.dur||ref.dur)/STEP*PX-3)+'px';
-      gh.style.left=(4+k*7)+'px';gh.style.right=(4+k*3)+'px';
-      gh.textContent=n+' · '+ref.title;col.appendChild(gh);});});
+  // 타인 레이아웃 적용 매핑
+  const displayEV = EV.map(e => {
+    let out = { ...e };
+    if (targetName) {
+      const l = targetLayout.find(x => x.id === e.id);
+      if (l) {
+        out.day = l.day; out.start = l.start; out.dur = l.dur || e.dur;
+        out.locked = l.locked; out.color = l.color || e.color;
+      } else {
+        out.start = null; // 타인이 아직 미배치한 일정
+      }
+    }
+    return out;
+  });
 
-  EV.filter(e=>e.start!=null).forEach(e=>{
+  displayEV.filter(e=>e.start!=null).forEach(e=>{
     const col=$('#col'+e.day);if(!col)return;
     const b=document.createElement('div');b.className='blk'+(e.locked?' locked':'');
     b.style.background=e.color;b.style.top=(idx(e.start)*PX)+'px';
@@ -452,8 +555,6 @@ function render(){
     let pinHtml = '';
     if (e.locked) { pinHtml = '<i class="pin">🔒</i>'; } 
     else if (e.type === 'date') { pinHtml = `<span class="date-pin">${extractDateStr(e.day)}</span>`; }
-
-    // 요청하신 메모 형식: 줄바꿈 지원 + <b>m.</b>
     const formattedMemo = esc(e.memo).replace(/\n/g, '<br>');
 
     b.innerHTML=`<b class="tt1">${esc(e.title)}</b>`
@@ -461,21 +562,53 @@ function render(){
       +(e.memo&&h>54?`<span class="ln"><b>m.</b> ${formattedMemo}</span>`:'')
       +(w.length&&h>40?`<span class="wln"><b>w.</b> ${esc(w.join(', '))}</span>`:'')
       +pinHtml+(v?`<i class="vt">👍${v}</i>`:'');
-    bindDrag(b,e,true);col.appendChild(b);});
+      
+    // 타인의 시간표일 경우 완전 읽기 전용 (터치 불가)
+    if(isMine) bindDrag(b,e,true);
+    else b.style.pointerEvents = 'none';
+    col.appendChild(b);
+  });
 
-  const un=EV.filter(e=>e.start==null),tray=$('#tray');
+  const un=displayEV.filter(e=>e.start==null),tray=$('#tray');
   $('#trayCnt').textContent=`(${un.length})`;
+  
+  if(isMine) {
+    $('#btnAuto').style.display = 'inline-block';
+    $('#btnConsensus').style.display = 'inline-block';
+  } else {
+    $('#btnAuto').style.display = 'none';
+    $('#btnConsensus').style.display = 'none';
+  }
+
   tray.innerHTML=un.length?'':'<div class="empty">모두 배치 완료 🎉</div>';
   un.forEach(e=>{const c=document.createElement('div');c.className='chip';c.style.background=e.color;
     const v=votes(e.id);
-    c.innerHTML=`<div class="tx">${esc(e.title)}${v?' 👍'+v:''}${fixTag(e)}
+    // 🔥 트레이 태그 변경: 날짜 시간 태그 삭제, 깔끔한 텍스트만 표시
+    c.innerHTML=`<div class="tx">${esc(e.title)}${v?' 👍'+v:''}
       <span>${e.dur}h · ${e.day!=null?DAYS[e.day]+' 고정':'날짜 자유'}</span></div>`;
     const up=document.createElement('div');up.className='up';up.textContent='▲ 올리기';
-    up.addEventListener('pointerdown',x=>x.stopPropagation());
-    up.addEventListener('click',x=>{x.stopPropagation();placeUp(e);});
-    c.appendChild(up);bindDrag(c,e,false);tray.appendChild(c);});
+    
+    if (isMine) {
+      up.addEventListener('pointerdown',x=>x.stopPropagation());
+      up.addEventListener('click',x=>{x.stopPropagation();placeUp(e);});
+      c.appendChild(up);
+      bindDrag(c,e,false);
+    } else {
+      up.style.display = 'none';
+      c.style.opacity = '0.7';
+      c.style.pointerEvents = 'none'; // 남의 미배치 칩은 클릭/드래그 불가
+      c.appendChild(up);
+    }
+    tray.appendChild(c);
+  });
 }
-window.tgl=n=>{show.has(n)?show.delete(n):show.add(n);render();};
+
+// 🔥 멤버 칩 클릭 시 조회 대상 전환 (토글)
+window.tgl=n=>{
+  if (viewingUser === n) viewingUser = (me ? me.name : null); 
+  else viewingUser = n;
+  render();
+};
 window.setView=d=>{viewDay=d;render();window.scrollTo({top:0,behavior:'smooth'});};
 
 $('#btnExpand').onclick=()=>{
@@ -484,22 +617,32 @@ $('#btnExpand').onclick=()=>{
   $('#btnExpand').textContent = t.classList.contains('hidden') ? '▲ 펼치기' : '▼ 접기';
 };
 
+// 🔥 트레이 스크롤(드래그) 버그 픽스 완료
 let drag=null,lpTimer=null;
 function bindDrag(el,ev,isBlock){
   el.addEventListener('pointerdown',s=>{
     drag={ev,el,x0:s.clientX,y0:s.clientY,armed:false,ok:!ev.locked||isAdmin,fromTray:!isBlock};
     lpTimer=setTimeout(()=>{if(!drag)return;
       if(!drag.ok){toast('🔒 시간 고정 일정 — 관리자만 이동');return;}
-      drag.armed=true;el.setPointerCapture(s.pointerId);
+      drag.armed=true;
+      
+      // ✨ 핵심 픽스: 길게 눌렀을 때만 브라우저 스크롤을 뺏어옵니다 (그 전엔 스크롤 정상 작동)
+      el.setPointerCapture(s.pointerId); 
+      
       el.classList.add(isBlock?'dragging':'grabbing');
       if(navigator.vibrate)navigator.vibrate(15);
       const r=el.getBoundingClientRect();
       el.style.position='fixed';el.style.width=Math.min(r.width,130)+'px';
       el.style.left=(s.clientX-45)+'px';el.style.top=(s.clientY-16)+'px';el.style.right='auto';
       el.style.pointerEvents='none';},300);});
+      
   el.addEventListener('pointermove',s=>{
     if(!drag||drag.el!==el)return;
-    if(!drag.armed){if(Math.hypot(s.clientX-drag.x0,s.clientY-drag.y0)>10){clearTimeout(lpTimer);drag=null;}return;}
+    if(!drag.armed){
+      // ✨ 길게 누르기(300ms) 전에 손가락을 10px 이상 움직이면 스크롤로 간주하여 드래그 취소!
+      if(Math.hypot(s.clientX-drag.x0,s.clientY-drag.y0)>10){clearTimeout(lpTimer);drag=null;}
+      return;
+    }
     s.preventDefault();el.style.left=(s.clientX-45)+'px';el.style.top=(s.clientY-16)+'px';},{passive:false});
   
   el.addEventListener('pointerup',s=>{
@@ -539,27 +682,25 @@ function syncDur(){const s=+$('#edStart').value,e=+$('#edEnd').value;
 function openEdit(e){
   cur=e;edColor=e.color;
   const c=consensus(e.id),w=sameSlotNames(e),inTray=e.start==null;
-  $('#edHead').innerHTML=esc(e.title)+fixTag(e,true)+(inTray?' <small>(미배치)</small>':'');
+  $('#edHead').innerHTML=esc(e.title)+fixTag(e)+(inTray?' <small>(미배치)</small>':'');
   $('#edInfo').innerHTML=`👍 ${votes(e.id)}표 · 참여 ${c.total}명 · <b>w.</b> ${w.length?esc(w.join(', ')):'없음'}<br>`+
     (c.best?`다수안 <b>${DAYS[c.best.day]} ${hhmm(c.best.start)}</b> (${c.best.n}/${c.total})`:'합의된 시간대 없음');
   $('#edTitle').value=e.title;$('#edPlace').value=e.place||'';$('#edMemo').value=e.memo||'';
   
   fillDay($('#edDay'));fillTime($('#edStart'));fillTime($('#edEnd'));fillDur($('#edDur'));
   $('#edDay').value=e.day!=null?e.day:(viewDay!=null?viewDay:0);
-  $('#edStart').value=e.start!=null?e.start:9;
+  $('#edStart').value=e.start!=null?e.start:H0+4;
   $('#edDur').value=e.dur;syncEnd();
   $('#edSw').innerHTML=COLORS.map(c2=>`<div class="sw" data-c="${c2}" style="background:${c2}" onclick="pickC('${c2}')"></div>`).join('');
   markSw(e.color);
   $('#edAdminBox').style.display=isAdmin?'block':'none';
   $('#edType').value=e.type;
   
-  // 🔥 [버그 픽스] 수정 가능 여부 판단 및 일반 사용자의 입력 필드 원천 차단
   const editable=isAdmin||!e.locked;
   ['edTitle','edPlace','edMemo','edDay','edStart','edEnd','edDur'].forEach(id=>{
     $('#'+id).disabled = !editable;
   });
   
-  // 잠긴 일정은 색깔 변경 방지 및 [저장/내리기] 버튼 숨김
   document.querySelectorAll('.sw').forEach(s => s.style.pointerEvents = editable ? 'auto' : 'none');
   $('#edMove').style.display = editable ? 'block' : 'none';
   $('#edSave').style.display = editable ? 'block' : 'none';
@@ -623,9 +764,24 @@ function persist(){if(!me)return;const r=loadRoom();
 $('#btnAuto').onclick=autoPlace;
 $('#btnLogin').onclick=()=>{if(me){$('#inRoom').value=room;$('#inName').value=me.name;$('#inPin').value=me.pin;
   $('#logoutRow').style.display='flex';}$('#mLogin').classList.add('on');};
-$('#doLogout').onclick=()=>{localStorage.removeItem(SESSK);me=null;show.clear();
+
+// 🔥 계정 로그아웃 및 계정 삭제(방 나가기) 로직
+$('#doLogout').onclick=()=>{localStorage.removeItem(SESSK);me=null;viewingUser=null;
   $('#whoBadge').textContent='게스트';$('#logoutRow').style.display='none';
   $('#inName').value='';$('#inPin').value='';closeAll();render();toast('로그아웃');};
+$('#doDelete').onclick=()=>{
+  if(!confirm('계정을 삭제하고 방에서 나가시겠습니까?\n(나의 배치된 시간표가 모두 삭제됩니다)')) return;
+  const r = loadRoom();
+  if(r.members[me.name]) delete r.members[me.name];
+  saveRoom(r);
+  localStorage.removeItem(SESSK);
+  me = null; viewingUser = null;
+  $('#whoBadge').textContent = '게스트';
+  $('#logoutRow').style.display = 'none';
+  $('#inName').value = ''; $('#inPin').value = '';
+  closeAll(); render(); toast('계정이 완전히 삭제되었습니다');
+};
+
 function enter(n,p,rc,silent){
   room=(rc||room).toUpperCase();const r=loadRoom();
   if(r.members[n] && r.members[n].pin && r.members[n].pin !== p){
@@ -663,13 +819,13 @@ $('#doAdmin').onclick=()=>{if($('#inAdminPin').value!==ADMIN_PIN)return toast('P
   isAdmin=true;$('#adminGate').style.display='none';$('#adminBody').style.display='block';
   $('#whoBadge').textContent='관리자';$('#inTrip').value=TRIP;
   fillDay($('#evDay'));fillTime($('#evStart'));fillTime($('#evEnd'));
-  $('#evStart').value=9;$('#evEnd').value=11;adminList();};
+  $('#evStart').value=H0+4;$('#evEnd').value=H0+6;adminList();};
 $('#evStart').addEventListener('change',()=>{if(+$('#evEnd').value<=+$('#evStart').value)$('#evEnd').value=+$('#evStart').value+1;});
 $('#doTrip').onclick=()=>{const v=$('#inTrip').value.trim();if(!v)return toast('이름 입력');
   TRIP=v;const r=loadRoom();r.trip=v;saveRoom(r);render();toast('여행 이름 변경됨');};
 function adminList(){$('#adminList').innerHTML=EV.map(e=>`<div class="item">
   <i class="dot" style="background:${e.color}"></i>
-  <div>${esc(e.title)}${fixTag(e,true)}
+  <div>${esc(e.title)}${fixTag(e)}
   <small>${e.day!=null?DAYS[e.day]:'-'} ${e.start!=null?hhmm(e.start)+'–'+hhmm(e.start+e.dur):'미배치'}</small></div>
   <button onclick="cyc('${e.id}')">유형↻</button><button onclick="del('${e.id}')">🗑</button></div>`).join('');}
 window.cyc=id=>{const e=EV.find(x=>x.id===id);
