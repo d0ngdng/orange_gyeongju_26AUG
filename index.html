@@ -306,7 +306,12 @@ function loadRoom(){try{return JSON.parse(localStorage.getItem(RK()))||{trip:TRI
   catch(e){return{trip:TRIP,plan:null,members:{},thr:2,v:0};}}
 
 /* ══════ 동기화 ══════ */
-const SYNC={mode:'kvdb',kvdbBucket:'X8TGrNoTNKZjR7qnPLZtFN',supabaseUrl:'',supabaseKey:''};
+const SYNC={
+  mode:'supabase', // kvdb에서 supabase로 변경 (필수는 아니지만 명확히 하기 위해)
+  kvdbBucket:'',
+  supabaseUrl:'qycgdqeftpvplkvyoooj',
+  supabaseKey:'sb_publishable_YCNfqgoGy7tPw-_V-2SbdQ_Oa8IiWdF'
+};
 let sb=null,lastPushed='',pollTimer=null,pushT=null;
 const bc='BroadcastChannel'in window?new BroadcastChannel('triptable'):null;
 if(bc)bc.onmessage=e=>{if(e.data.room===room)pullLocal();};
