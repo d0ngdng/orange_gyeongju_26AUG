@@ -306,7 +306,7 @@ function loadRoom(){try{return JSON.parse(localStorage.getItem(RK()))||{trip:TRI
   catch(e){return{trip:TRIP,plan:null,members:{},thr:2,v:0};}}
 
 /* ══════ 동기화 ══════ */
-const SYNC={mode:'kvdb',kvdbBucket:'FfEo6xhrsK8p6mQZ3rZ7Nu',supabaseUrl:'',supabaseKey:''};
+const SYNC={mode:'kvdb',kvdbBucket:'X8TGrNoTNKZjR7qnPLZtFN',supabaseUrl:'',supabaseKey:''};
 let sb=null,lastPushed='',pollTimer=null,pushT=null;
 const bc='BroadcastChannel'in window?new BroadcastChannel('triptable'):null;
 if(bc)bc.onmessage=e=>{if(e.data.room===room)pullLocal();};
