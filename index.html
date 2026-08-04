@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>경주 3박4일 · TripTable</title>
+<style>
+:root{
+  --bg:#f4f5f7; --card:#fff; --line:#e3e5e9; --txt:#1c1d21; --sub:#7c8290;
+  --accent:#c2410c; --accent-soft:#fdf0e8; --fix:#d92d20;
+  --px:13px;                     /* 15분 = 13px */
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--txt);
+  font-family:system-ui,'Apple SD Gothic Neo','Nanum Gothic',sans-serif;overscroll-behavior-y:none}
+
+/* ── 상단 고정 스택 ── */
+#topbar{position:sticky;top:0;z-index:50;background:var(--card);border-bottom:1px solid var(--line)}
+.hd{padding:8px 10px;display:flex;align-items:center;gap:6px}
+.hd h1{font-size:15px;margin:0;flex:1;font-weight:800;letter-spacing:-.4px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.badge{font-size:11px;background:var(--accent-soft);color:var(--accent);padding:3px 8px;border-radius:99px;font-weight:700;white-space:nowrap}
+.dotlive{width:7px;height:7px;border-radius:99px;background:#1aa179;display:inline-block;margin-right:4px;animation:pulse 1.6s infinite}
+@keyframes pulse{50%{opacity:.25}}
+button{font-family:inherit;border:0;border-radius:8px;padding:7px 9px;font-size:12px;font-weight:700;
+  background:#eceef2;color:#333;cursor:pointer;white-space:nowrap}
+button.pri{background:var(--accent);color:#fff}
+button.gh{background:#fff;border:1px solid var(--line)}
+.members{display:flex;gap:5px;overflow-x:auto;padding:0 10px 6px}
+.mchip{flex:0 0 auto;font-size:11px;font-weight:700;padding:4px 9px;border-radius:99px;
+  border:2px solid;background:#fff;cursor:pointer;opacity:.45}
+.mchip.act{opacity:1;color:#fff}
+.members .empty{font-size:11px;color:var(--sub);padding:3px 0}
+.viewbar{display:flex;gap:5px;overflow-x:auto;padding:0 10px 7px;align-items:center}
+.viewbar .lb{font-size:11px;color:var(--sub);font-weight:700;margin-right:2px}
+.vtab{flex:0 0 auto;font-size:11.5px;font-weight:700;padding:5px 10px;border-radius:99px;
+  background:#f1f2f5;color:#555;cursor:pointer}
+.vtab.act{background:var(--accent);color:#fff}
+
+.tthead{display:flex;background:#fafbfc;border-top:1px solid var(--line)}
+.tthead .gut{flex:0 0 40px}
+.tthead .dh{flex:1 1 0;text-align:center;font-size:11px;font-weight:800;padding:5px 0;border-left:1px solid var(--line)}
+.tthead .dh small{display:block;font-weight:500;color:var(--sub);font-size:10px}
+
+.wrap{padding:8px 8px 175px}
+.tt{background:var(--card);border:1px solid var(--line);border-radius:0 0 12px 12px;overflow:hidden;user-select:none}
+.ttbody{display:flex;position:relative}
+.gutter{flex:0 0 40px;position:relative}
+.gutter .tl{position:absolute;right:4px;font-size:10px;color:var(--sub);transform:translateY(-6px)}
+
+/* ── 보조선(그리드) ── */
+.daycol{
+  flex:1 1 0; position:relative; border-left:1px solid var(--line);
+  background-image:
+    linear-gradient(to bottom, var(--line) 1px, transparent 1px),
+    linear-gradient(to bottom, #eceef2 1px, transparent 1px),
+    linear-gradient(to bottom, #f5f6f8 1px, transparent 1px);
+  background-size: 100% calc(var(--px)*4), 100% calc(var(--px)*2), 100% var(--px);
+  background-position: top left;
+}
+
+.blk{position:absolute;left:2px;right:2px;border-radius:7px;padding:3px 5px;overflow:hidden;
+  font-size:11px;line-height:1.25;color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.18);touch-action:none;z-index:5}
+.blk b.tt1{display:block;font-size:11.5px;font-weight:800}
+.blk .tm{opacity:.92;font-size:9.5px;display:block}
+.blk .ln{display:block;font-size:9.5px;margin-top:2px;line-height:1.35}
+.blk .ln b{font-weight:800}
+.blk .wln{display:inline-block;font-size:9.5px;margin-top:1px}
+.blk .pin{position:absolute;top:2px;right:3px;font-size:10px;font-style:normal}
+.blk .date-pin {position:absolute;top:2px;right:3px;font-size:9.5px;font-weight:700;opacity:0.85;}
+.blk .vt{position:absolute;bottom:2px;right:3px;font-size:9.5px;background:rgba(0,0,0,.28);padding:0 4px;border-radius:99px}
+.blk.dragging{opacity:.9;z-index:99;box-shadow:0 8px 20px rgba(0,0,0,.35)}
+.blk.locked{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.14) 0 6px,transparent 6px 12px)}
+.ghost{position:absolute;border-radius:7px;border:2px dashed;background:transparent;font-size:9px;
+  font-weight:700;padding:1px 3px;opacity:.8;pointer-events:none;overflow:hidden;z-index:2}
+
+.fx{font-size:9px;font-weight:600;margin-left:4px;opacity:.85}
+.fx.on{color:#ffdad6;font-weight:900;opacity:1}
+.sheet .fx{opacity:1;color:var(--sub)}
+.sheet .fx.on{color:var(--fix);font-weight:900}
+
+.tray{position:fixed;left:0;right:0;bottom:0;z-index:45;background:var(--card);
+  border-top:1px solid var(--line);padding:8px 10px 10px;box-shadow:0 -4px 14px rgba(0,0,0,.07)}
+.tray h3{margin:0 0 6px;font-size:12px;color:var(--sub);display:flex;gap:6px;align-items:center}
+.tray h3 .sp{flex:1}
+
+.chips{display:grid;grid-auto-flow:row;grid-template-columns:repeat(2,1fr);
+  max-height:160px;overflow-y:auto;touch-action:pan-y;gap:6px;padding-bottom:4px;}
+.chips.hidden{display:none !important;}
+
+.chip{border-radius:8px;padding:6px 9px;color:#fff;font-size:11px;font-weight:700;
+  touch-action:pan-x;position:relative;display:flex;align-items:center;gap:6px}
+.chip .tx{pointer-events:none}
+.chip span{display:block;font-weight:500;opacity:.9;font-size:10px}
+.chip .up{background:rgba(255,255,255,.25);border-radius:6px;padding:4px 7px;font-size:11px;font-weight:800;color:#fff;flex:0 0 auto}
+.chip.grabbing{opacity:.9;z-index:99;box-shadow:0 8px 20px rgba(0,0,0,.35)}
+.empty{font-size:11px;color:var(--sub);padding:12px 0}
+
+.mask{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:70;display:none;align-items:flex-end}
+.mask.on{display:flex}
+.sheet{background:#fff;width:100%;border-radius:16px 16px 0 0;padding:16px 14px 26px;max-height:90vh;overflow:auto}
+.sheet h2{margin:0 0 10px;font-size:15px}
+label{display:block;font-size:11px;color:var(--sub);margin:8px 0 3px;font-weight:700}
+input,select,textarea{width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;font-size:13px;
+  font-family:inherit;background:#fff}
+input:disabled, select:disabled, textarea:disabled {background:#f4f5f7; color:#888; opacity:0.8;}
+textarea{min-height:60px;resize:vertical;line-height:1.5}
+.row{display:flex;gap:8px}.row>*{flex:1}
+.acts{display:flex;gap:8px;margin-top:12px}.acts button{flex:1;padding:11px}
+.item{display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;font-size:12px}
+.dot{width:11px;height:11px;border-radius:3px;flex:0 0 auto}
+.item div{flex:1}.item small{color:var(--sub);display:block}
+.hint{font-size:11px;color:var(--sub);line-height:1.55;margin-top:10px;background:#fafbfc;border:1px solid var(--line);border-radius:8px;padding:9px}
+.toast{position:fixed;left:50%;bottom:195px;transform:translateX(-50%);background:#1c1d21;color:#fff;
+  font-size:12px;padding:8px 14px;border-radius:99px;z-index:99;opacity:0;transition:.25s;pointer-events:none}
+.toast.on{opacity:1}
+.bar{height:8px;background:#eceef2;border-radius:99px;overflow:hidden;margin-top:3px}
+.bar i{display:block;height:100%;background:var(--accent)}
+.swatches{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.sw{width:30px;height:30px;border-radius:8px;border:3px solid transparent;cursor:pointer}
+.sw.sel{border-color:#1c1d21}
+.nudge{display:flex;gap:6px}.nudge button{flex:1;padding:10px}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="hd">
+    <h1 id="tripName">🏯 경주 08.18–08.21</h1>
+    <span class="badge" id="whoBadge">게스트</span>
+    <span class="badge" id="liveBadge"><i class="dotlive"></i>자동저장</span>
+    <button id="btnLogin">내 시간표</button>
+    <button id="btnVote">투표</button>
+    <button id="btnAdmin">관리</button>
+  </div>
+  <div class="members" id="members"></div>
+  <div class="viewbar" id="viewbar"></div>
+  <div class="tthead" id="tthead"></div>
+</div>
+
+<div class="wrap">
+  <div class="tt"><div class="ttbody" id="ttbody"></div></div>
+  <div class="hint">
+    · 블록 <b>탭</b>=편집 · <b>길게 눌러</b> 드래그=이동<br>
+    · 제목 옆 <b style="color:var(--fix)">날짜/시간</b>(붉은체)=고정, 회색=자유<br>
+    · 변경은 <b>자동 저장·동기화</b>됩니다.
+  </div>
+</div>
+
+<div class="tray">
+  <h3>미배치 일정 <span id="trayCnt"></span>
+    <span class="sp"></span>
+    <button id="btnExpand">▼ 접기</button>
+    <button id="btnAuto">자동배치</button>
+    <button id="btnConsensus">다수안</button>
+  </h3>
+  <div class="chips" id="tray"></div>
+</div>
+
+<div class="mask" id="mLogin"><div class="sheet">
+  <h2>방 참여 · 내 시간표</h2>
+  <label>방 코드 (동행끼리 동일하게)</label><input id="inRoom" value="GYEONGJU2608">
+  <div class="row">
+    <div><label>닉네임</label><input id="inName" placeholder="예: 지민"></div>
+    <div><label>PIN 4자리 (선택)</label><input id="inPin" type="tel" maxlength="4" placeholder="비워두면 암호 없음"></div>
+  </div>
+  <div class="acts"><button onclick="closeAll()">닫기</button><button class="pri" id="doLogin">입장</button></div>
+  <div class="acts" id="logoutRow" style="display:none"><button id="doLogout">로그아웃 / 계정 전환</button></div>
+  <div class="hint" id="syncInfo"></div>
+</div></div>
+
+<div class="mask" id="mEdit"><div class="sheet">
+  <h2 id="edHead">일정 편집</h2>
+  <div id="edInfo" class="hint" style="margin-top:0"></div>
+
+  <label id="edNudgeLb">올리기 / 내리기 (15분 단위)</label>
+  <div class="nudge"><button id="nUp">▲ 15분 올리기</button><button id="nDown">▼ 15분 내리기</button></div>
+
+  <label>이름</label><input id="edTitle">
+  
+  <div class="row">
+    <div><label>날짜</label><select id="edDay"></select></div>
+    <div><label>소요</label><select id="edDur"></select></div>
+  </div>
+  <div class="row">
+    <div><label>시작</label><select id="edStart"></select></div>
+    <div><label>종료</label><select id="edEnd"></select></div>
+  </div>
+
+  <label>장소</label><input id="edPlace" placeholder="예: 불국사">
+  <label>메모</label><textarea id="edMemo" placeholder="예약번호, 준비물 등"></textarea>
+  
+  <div id="edAdminBox" style="display:none">
+    <label>🛠 관리자 · 고정 유형</label>
+    <select id="edType">
+      <option value="fixed">날짜+시간 모두 고정</option>
+      <option value="date">날짜만 고정</option>
+      <option value="free">미지정 (자유)</option>
+    </select>
+  </div>
+  
+  <label>색</label><div class="swatches" id="edSw"></div>
+
+  <div class="acts"><button id="edVote" style="width: 100%;">👍 같이해요</button></div>
+  <div class="acts">
+    <button id="edMove"></button>
+    <button onclick="closeAll()">닫기</button>
+    <button class="pri" id="edSave">저장</button>
+  </div>
+</div></div>
+
+<div class="mask" id="mAdmin"><div class="sheet">
+  <h2>관리자</h2>
+  <div id="adminGate">
+    <label>관리자 PIN</label><input id="inAdminPin" type="tel" maxlength="4" placeholder="기본 1234">
+    <div class="acts"><button onclick="closeAll()">닫기</button><button class="pri" id="doAdmin">입장</button></div>
+  </div>
+  <div id="adminBody" style="display:none">
+    <label>여행 이름</label>
+    <div class="row"><input id="inTrip"><button class="gh" id="doTrip" style="flex:0 0 70px">변경</button></div>
+    <hr style="border:0;border-top:1px solid var(--line);margin:14px 0">
+    <label>일정 이름</label><input id="evTitle" placeholder="예: 불국사">
+    <label>장소</label><input id="evPlace">
+    <label>메모</label><textarea id="evMemo"></textarea>
+    <label>고정 유형</label>
+    <select id="evType">
+      <option value="fixed">날짜+시간 모두 고정</option>
+      <option value="date">날짜만 고정</option>
+      <option value="free">미지정</option>
+    </select>
+    <div class="row">
+      <div><label>날짜</label><select id="evDay"></select></div>
+      <div><label>시작</label><select id="evStart"></select></div>
+      <div><label>종료</label><select id="evEnd"></select></div>
+    </div>
+    <div class="acts"><button onclick="closeAll()">닫기</button><button class="pri" id="doAdd">추가</button></div>
+    <div id="adminList" style="margin-top:10px"></div>
+    <div class="hint">목록의 <b>날짜/시간</b> 태그를 눌러 고정 여부를 즉시 토글할 수 있습니다.</div>
+  </div>
+</div></div>
+
+<div class="mask" id="mVote"><div class="sheet">
+  <h2>👍 투표 · 합의도</h2><div id="voteBody"></div>
+  <div class="acts"><button class="pri" onclick="closeAll()">닫기</button></div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let TRIP='🏯 경주 08.18–08.21';
+const DAYS=['8/18 화','8/19 수','8/20 목','8/21 금'];
+const H0=7,H1=24,STEP=0.25,SLOTS=(H1-H0)/STEP,PX=13;
+const ADMIN_PIN='1234';
+const COLORS=['#c2410c','#2f6fe8','#1aa179','#b8860b','#7b4de8','#d63f8f','#3aa0c4','#6b7b2f','#a13b3b','#444b5a'];
+const DURS=[0.25,0.5,0.75,1,1.25,1.5,1.75,2,2.5,3,3.5,4,5,6,8];
+
+let SEED=[
+ {t:'KTX 대전→경주',p:'신경주역',m:'11:04 대전 출발 / 12:11 도착',type:'fixed',d:0,s:11,dur:1.25},
+ {t:'점심 · 황리단길',p:'황남동',m:'',type:'date',d:0,dur:1.5},
+ {t:'숙소 체크인',p:'황남동',m:'',type:'fixed',d:0,s:15,dur:1},
+ {t:'동궁과 월지 야경',p:'인왕동',m:'야간개장 22:00까지',type:'fixed',d:0,s:20,dur:2},
+ {t:'불국사',p:'진현동',m:'',type:'date',d:1,dur:3},
+ {t:'석굴암',p:'토함산',m:'불국사에서 버스 12번',type:'date',d:1,dur:2},
+ {t:'국립경주박물관',p:'인왕동',m:'월요일 휴관',type:'date',d:2,dur:2.5},
+ {t:'보문호수 산책',p:'보문단지',m:'',type:'date',d:2,dur:2},
+ {t:'첨성대·대릉원',p:'황남동',m:'',type:'free',dur:2},
+ {t:'경주월드',p:'보문단지',m:'선택 일정',type:'free',dur:5},
+ {t:'교촌마을·한복',p:'교동',m:'',type:'free',dur:2},
+ {t:'숙소 체크아웃',p:'',m:'11시 이전',type:'fixed',d:3,s:10,dur:1},
+ {t:'KTX 경주→대전',p:'신경주역',m:'',type:'fixed',d:3,s:17,dur:1.25},
+];
+
+let EV=[],me=null,room='GYEONGJU2608',isAdmin=false,show=new Set(),cur=null,edColor=null;
+let viewDay=null;
+const $=s=>document.querySelector(s);
+const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),1500);};
+const hhmm=h=>{const H=Math.floor(h+1e-9),M=Math.round((h-H)*60);return String(H).padStart(2,'0')+':'+String(M).padStart(2,'0');};
+const esc=s=>(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const RK=()=>'ttroom_'+room, SESSK='tt_session';
+const visDays=()=>viewDay==null?DAYS.map((_,i)=>i):[viewDay];
+const idx=t=>Math.round((t-H0)/STEP);
+
+function init(){
+  EV=SEED.map((e,i)=>({id:'e'+i,title:e.t,place:e.p,memo:e.m||'',type:e.type,
+    color:COLORS[i%COLORS.length],day:e.type==='free'?null:e.d,
+    start:e.type==='fixed'?e.s:null,dur:e.dur,locked:e.type==='fixed'}));
+  EV.filter(e=>e.type==='date'&&e.start==null).forEach(e=>{const s=findSlot(e.day,e.dur,e.id);if(s!=null)e.start=s;});
+}
+function loadRoom(){try{return JSON.parse(localStorage.getItem(RK()))||{trip:TRIP,plan:null,members:{},v:0};}
+  catch(e){return{trip:TRIP,plan:null,members:{},v:0};}}
+
+const SYNC = {mode:'kvdb',kvdbBucket:'FfEo6xhrsK8p6mQZ3rZ7Nu',supabaseUrl:'',supabaseKey:''};
+let sb=null, lastPushed='', pollTimer=null;
+const bc='BroadcastChannel'in window?new BroadcastChannel('triptable'):null;
+if(bc)bc.onmessage=e=>{if(e.data.room===room)pullLocal();};
+window.addEventListener('storage',e=>{if(e.key===RK())pullLocal();});
+function flashLive(t){const b=$('#liveBadge');b.innerHTML='<i class="dotlive"></i>'+t;
+  clearTimeout(flashLive.t);flashLive.t=setTimeout(()=>b.innerHTML='<i class="dotlive"></i>자동저장',1400);}
+function pullLocal(){applyRoomToEV();render();flashLive('업데이트');}
+function saveRoom(r){r.v=Date.now();localStorage.setItem(RK(),JSON.stringify(r));bc&&bc.postMessage({room});pushRemote(r);}
+
+let pushT=null;
+function pushRemote(r){
+  clearTimeout(pushT);
+  pushT=setTimeout(async()=>{
+    const body=JSON.stringify(r); if(body===lastPushed)return; lastPushed=body;
+    try{
+      if(SYNC.supabaseUrl&&sb){ await sb.from('trip_rooms').upsert({code:room,data:r}); }
+      else if(SYNC.mode==='kvdb'){ await fetch(`https://kvdb.io/${SYNC.kvdbBucket}/${encodeURIComponent(room)}`,{method:'PUT',body}); }
+      flashLive('동기화됨');
+    }catch(e){ flashLive('오프라인'); }
+  },600);
+}
+async function pullRemote(){
+  try{
+    let data=null;
+    if(SYNC.supabaseUrl&&sb){
+      const {data:d}=await sb.from('trip_rooms').select('data').eq('code',room).single();
+      data=d&&d.data;
+    }else if(SYNC.mode==='kvdb'){
+      const res=await fetch(`https://kvdb.io/${SYNC.kvdbBucket}/${encodeURIComponent(room)}`,{cache:'no-store'});
+      if(res.ok) data=JSON.parse(await res.text());
+    }
+    if(!data)return;
+    const local=loadRoom();
+    if((data.v||0)>(local.v||0)){
+      localStorage.setItem(RK(),JSON.stringify(data));
+      lastPushed=JSON.stringify(data);
+      pullLocal();
+    }
+  }catch(e){}
+}
+function startSync(){
+  if(SYNC.supabaseUrl&&SYNC.supabaseKey&&!sb){
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+    s.onload=()=>{sb=supabase.createClient(SYNC.supabaseUrl,SYNC.supabaseKey);
+      sb.channel('room-'+room).on('postgres_changes',
+        {event:'*',schema:'public',table:'trip_rooms',filter:'code=eq.'+room},
+        p=>{localStorage.setItem(RK(),JSON.stringify(p.new.data));pullLocal();}).subscribe();
+      pullRemote();};
+    document.head.appendChild(s);
+  }
+  clearInterval(pollTimer);
+  pollTimer=setInterval(pullRemote,3000);
+  pullRemote();
+  $('#syncInfo').innerHTML=`기기 간 동기화: <b>${SYNC.supabaseUrl?'Supabase':(SYNC.mode==='kvdb'?'kvdb.io 릴레이':'끔')}</b> · 방 코드 <b>${room}</b>`;
+}
+
+function applyRoomToEV(){
+  const r=loadRoom(); if(r.trip)TRIP=r.trip;
+  if(r.plan){
+    const plan=r.plan;
+    plan.forEach(p=>{const e=EV.find(x=>x.id===p.id);
+      if(!e)EV.push(JSON.parse(JSON.stringify(p)));
+      else{
+        e.title=p.title;e.type=p.type;e.place=p.place;e.memo=p.memo;e.dur=e.dur||p.dur;
+        e.locked=(p.type==='fixed'); // 잠금 상태 동기화 누락 버그 픽스
+        if(p.type==='fixed'){e.day=p.day;e.start=p.start;e.dur=p.dur;}
+      }
+    });
+    EV=EV.filter(e=>plan.some(p=>p.id===e.id));
+  }
+  if(me&&r.members[me.name]&&r.members[me.name].layout){
+    r.members[me.name].layout.forEach(l=>{const e=EV.find(x=>x.id===l.id);
+      if(e&&e.type!=='fixed'){e.day=l.day;e.start=l.start;e.locked=l.locked;
+        if(l.dur)e.dur=l.dur;if(l.color)e.color=l.color;}
+    });
+  }
+}
+
+function occupied(day,except){const a=new Array(SLOTS).fill(false);
+  EV.forEach(e=>{if(e.id===except||e.day!==day||e.start==null)return;
+    const s=idx(e.start),t=s+Math.round(e.dur/STEP);
+    for(let i=Math.max(0,s);i<Math.min(SLOTS,t);i++)a[i]=true;});return a;}
+function findSlot(day,dur,except,from){
+  const occ=occupied(day,except),need=Math.round(dur/STEP),st=Math.max(0,idx(from||9));
+  for(let i=st;i<=SLOTS-need;i++){let ok=true;
+    for(let j=i;j<i+need;j++)if(occ[j]){ok=false;i=j;break;}
+    if(ok)return H0+i*STEP;}return null;}
+function dayLoad(d){return EV.filter(e=>e.day===d&&e.start!=null).reduce((s,e)=>s+e.dur,0);}
+function placeUp(e,silent){
+  const ds=e.day!=null?[e.day]:(viewDay!=null?[viewDay,...DAYS.map((_,i)=>i)]:DAYS.map((_,i)=>i).sort((a,b)=>dayLoad(a)-dayLoad(b)));
+  for(const d of ds){const s=findSlot(d,e.dur,e.id);
+    if(s!=null&&s+e.dur<=H1){e.day=d;e.start=s;persist();render();
+      if(!silent)toast(`${DAYS[d]} ${hhmm(s)}에 배치`);return true;}}
+  if(!silent)toast('넣을 빈 시간이 없어요');return false;}
+function autoPlace(){let n=0;
+  EV.filter(e=>e.start==null).sort((a,b)=>b.dur-a.dur).forEach(e=>{if(placeUp(e,true))n++;});
+  persist();render();toast(n?n+'개 자동 배치':'빈칸이 없어요');}
+
+function allMembers(){return loadRoom().members||{};}
+function sameSlotNames(e){const out=[];Object.entries(allMembers()).forEach(([n,m])=>{
+  if(me&&n===me.name)return;const f=(m.layout||[]).find(x=>x.id===e.id);
+  if(f&&f.day===e.day&&f.start===e.start)out.push(n);});return out;}
+function consensus(id){const t={};let total=0;
+  Object.values(allMembers()).forEach(m=>{total++;const f=(m.layout||[]).find(x=>x.id===id);
+    if(f&&f.start!=null){const k=f.day+'@'+f.start;t[k]=(t[k]||0)+1;}});
+  const b=Object.entries(t).sort((x,y)=>y[1]-x[1])[0];
+  return{total,best:b?{day:+b[0].split('@')[0],start:+b[0].split('@')[1],n:b[1]}:null};}
+function votes(id){return Object.values(allMembers()).filter(m=>(m.votes||[]).includes(id)).length;}
+
+function fixTag(e,inSheet){
+  const dFix=e.type==='fixed'||e.type==='date', tFix=e.type==='fixed';
+  return `<span class="fx ${dFix?'on':''}">${dFix?'<b>날짜</b>':'날짜'}</span>`+
+         `<span class="fx ${tFix?'on':''}">${tFix?'<b>시간</b>':'시간'}</span>`;
+}
+function extractDateStr(dayIndex) {
+  if (dayIndex == null || dayIndex < 0 || dayIndex >= DAYS.length) return '';
+  const match = DAYS[dayIndex].match(/\d+\/(\d+)/);
+  return match ? `${match[1]}일` : '';
+}
+
+function render(){
+  const r=loadRoom();if(r.trip)TRIP=r.trip;$('#tripName').textContent=TRIP;
+
+  const ms=allMembers(),names=Object.keys(ms);
+  $('#members').innerHTML=names.length?names.map(n=>{const c=ms[n].color||'#888',a=show.has(n);
+    return `<div class="mchip ${a?'act':''}" style="border-color:${c};${a?'background:'+c:''}" onclick="tgl('${n}')">${me&&n===me.name?'⭐ ':''}${esc(n)}</div>`;
+  }).join(''):'<div class="empty">참여자 없음 · “내 시간표”로 입장</div>';
+
+  $('#viewbar').innerHTML='<span class="lb">보기</span>'+
+    `<div class="vtab ${viewDay==null?'act':''}" onclick="setView(null)">전체</div>`+
+    DAYS.map((d,i)=>`<div class="vtab ${viewDay===i?'act':''}" onclick="setView(${i})">${d}<\/div>`).join('');
+
+  const vd=visDays();
+  $('#tthead').innerHTML='<div class="gut"></div>'+vd.map(i=>{const[a,b]=DAYS[i].split(' ');
+    return `<div class="dh">${a}<small>${b}${viewDay!=null?' · '+dayLoad(i)+'h':''}</small></div>`;}).join('');
+
+  let g='<div class="gutter" style="height:'+(SLOTS*PX)+'px">';
+  for(let i=0;i<SLOTS;i+=4)g+=`<div class="tl" style="top:${i*PX}px">${hhmm(H0+i*STEP)}</div>`;
+  g+='</div>';
+  g+=vd.map(d=>`<div class="daycol" data-d="${d}" id="col${d}" style="height:${SLOTS*PX}px"></div>`).join('');
+  $('#ttbody').innerHTML=g;
+
+  [...show].forEach((n,k)=>{const m=ms[n];if(!m||(me&&n===me.name))return;
+    (m.layout||[]).forEach(l=>{if(l.start==null)return;const ref=EV.find(e=>e.id===l.id);if(!ref)return;
+      const col=$('#col'+l.day);if(!col)return;
+      const gh=document.createElement('div');gh.className='ghost';
+      gh.style.borderColor=m.color;gh.style.color=m.color;
+      gh.style.top=(idx(l.start)*PX)+'px';gh.style.height=((l.dur||ref.dur)/STEP*PX-3)+'px';
+      gh.style.left=(4+k*7)+'px';gh.style.right=(4+k*3)+'px';
+      gh.textContent=n+' · '+ref.title;col.appendChild(gh);});});
+
+  EV.filter(e=>e.start!=null).forEach(e=>{
+    const col=$('#col'+e.day);if(!col)return;
+    const b=document.createElement('div');b.className='blk'+(e.locked?' locked':'');
+    b.style.background=e.color;b.style.top=(idx(e.start)*PX)+'px';
+    const h=e.dur/STEP*PX-3;b.style.height=h+'px';
+    const v=votes(e.id),w=sameSlotNames(e);
+    
+    let pinHtml = '';
+    if (e.locked) { pinHtml = '<i class="pin">🔒</i>'; } 
+    else if (e.type === 'date') { pinHtml = `<span class="date-pin">${extractDateStr(e.day)}</span>`; }
+
+    // 요청하신 메모 형식: 줄바꿈 지원 + <b>m.</b>
+    const formattedMemo = esc(e.memo).replace(/\n/g, '<br>');
+
+    b.innerHTML=`<b class="tt1">${esc(e.title)}</b>`
+      +`<span class="tm">${hhmm(e.start)}–${hhmm(e.start+e.dur)}${e.place?' · '+esc(e.place):''}</span>`
+      +(e.memo&&h>54?`<span class="ln"><b>m.</b> ${formattedMemo}</span>`:'')
+      +(w.length&&h>40?`<span class="wln"><b>w.</b> ${esc(w.join(', '))}</span>`:'')
+      +pinHtml+(v?`<i class="vt">👍${v}</i>`:'');
+    bindDrag(b,e,true);col.appendChild(b);});
+
+  const un=EV.filter(e=>e.start==null),tray=$('#tray');
+  $('#trayCnt').textContent=`(${un.length})`;
+  tray.innerHTML=un.length?'':'<div class="empty">모두 배치 완료 🎉</div>';
+  un.forEach(e=>{const c=document.createElement('div');c.className='chip';c.style.background=e.color;
+    const v=votes(e.id);
+    c.innerHTML=`<div class="tx">${esc(e.title)}${v?' 👍'+v:''}${fixTag(e)}
+      <span>${e.dur}h · ${e.day!=null?DAYS[e.day]+' 고정':'날짜 자유'}</span></div>`;
+    const up=document.createElement('div');up.className='up';up.textContent='▲ 올리기';
+    up.addEventListener('pointerdown',x=>x.stopPropagation());
+    up.addEventListener('click',x=>{x.stopPropagation();placeUp(e);});
+    c.appendChild(up);bindDrag(c,e,false);tray.appendChild(c);});
+}
+window.tgl=n=>{show.has(n)?show.delete(n):show.add(n);render();};
+window.setView=d=>{viewDay=d;render();window.scrollTo({top:0,behavior:'smooth'});};
+
+$('#btnExpand').onclick=()=>{
+  const t=$('#tray');
+  t.classList.toggle('hidden');
+  $('#btnExpand').textContent = t.classList.contains('hidden') ? '▲ 펼치기' : '▼ 접기';
+};
+
+let drag=null,lpTimer=null;
+function bindDrag(el,ev,isBlock){
+  el.addEventListener('pointerdown',s=>{
+    drag={ev,el,x0:s.clientX,y0:s.clientY,armed:false,ok:!ev.locked||isAdmin,fromTray:!isBlock};
+    lpTimer=setTimeout(()=>{if(!drag)return;
+      if(!drag.ok){toast('🔒 시간 고정 일정 — 관리자만 이동');return;}
+      drag.armed=true;el.setPointerCapture(s.pointerId);
+      el.classList.add(isBlock?'dragging':'grabbing');
+      if(navigator.vibrate)navigator.vibrate(15);
+      const r=el.getBoundingClientRect();
+      el.style.position='fixed';el.style.width=Math.min(r.width,130)+'px';
+      el.style.left=(s.clientX-45)+'px';el.style.top=(s.clientY-16)+'px';el.style.right='auto';
+      el.style.pointerEvents='none';},300);});
+  el.addEventListener('pointermove',s=>{
+    if(!drag||drag.el!==el)return;
+    if(!drag.armed){if(Math.hypot(s.clientX-drag.x0,s.clientY-drag.y0)>10){clearTimeout(lpTimer);drag=null;}return;}
+    s.preventDefault();el.style.left=(s.clientX-45)+'px';el.style.top=(s.clientY-16)+'px';},{passive:false});
+  
+  el.addEventListener('pointerup',s=>{
+    clearTimeout(lpTimer);
+    if(!drag||drag.el!==el){drag=null;return;}
+    if(!drag.armed){openEdit(ev);drag=null;return;}
+    
+    const tgt=document.elementFromPoint(s.clientX,s.clientY);
+    el.style.pointerEvents=''; 
+    
+    const col=tgt&&tgt.closest?tgt.closest('.daycol'):null;
+    if(col){const d=+col.dataset.d;
+      if(ev.type==='date'&&ev.day!=null&&ev.day!==d&&!isAdmin)toast('날짜 고정 일정입니다');
+      else{const rc=col.getBoundingClientRect();
+        let sl=Math.round((s.clientY-rc.top)/PX);
+        sl=Math.max(0,Math.min(SLOTS-Math.round(ev.dur/STEP),sl));
+        const occ=occupied(d,ev.id);let cl=false;
+        for(let i=sl;i<sl+Math.round(ev.dur/STEP);i++)if(occ[i])cl=true;
+        if(cl)toast('겹치는 일정이 있어요');else{ev.day=d;ev.start=H0+sl*STEP;persist();}}}
+    else if(tgt&&tgt.closest&&tgt.closest('.tray')){ev.start=null;if(ev.type==='free')ev.day=null;persist();}
+    else if(drag.fromTray)placeUp(ev,true);
+    drag=null;render();});
+  
+  el.addEventListener('pointercancel',()=>{clearTimeout(lpTimer);drag=null;render();});
+}
+
+function fillTime(sel){let o='';for(let h=H0;h<=H1;h+=STEP)o+=`<option value="${h}">${hhmm(h)}</option>`;sel.innerHTML=o;}
+function fillDur(sel){sel.innerHTML=DURS.map(d=>`<option value="${d}">${d<1?d*60+'분':d+'h'}</option>`).join('');}
+function fillDay(sel){sel.innerHTML=DAYS.map((d,i)=>`<option value="${i}">${d}</option>`).join('');}
+function syncEnd(){$('#edEnd').value=Math.min(H1,+$('#edStart').value+ +$('#edDur').value);}
+function syncDur(){const s=+$('#edStart').value,e=+$('#edEnd').value;
+  let d=+(e-s).toFixed(2);if(d<=0){toast('종료는 시작 이후여야 해요');syncEnd();return;}
+  if(![...$('#edDur').options].some(o=>+o.value===d)){const o=document.createElement('option');
+    o.value=d;o.textContent=d<1?d*60+'분':d+'h';$('#edDur').appendChild(o);}
+  $('#edDur').value=d;}
+  
+function openEdit(e){
+  cur=e;edColor=e.color;
+  const c=consensus(e.id),w=sameSlotNames(e),inTray=e.start==null;
+  $('#edHead').innerHTML=esc(e.title)+fixTag(e,true)+(inTray?' <small>(미배치)</small>':'');
+  $('#edInfo').innerHTML=`👍 ${votes(e.id)}표 · 참여 ${c.total}명 · <b>w.</b> ${w.length?esc(w.join(', ')):'없음'}<br>`+
+    (c.best?`다수안 <b>${DAYS[c.best.day]} ${hhmm(c.best.start)}</b> (${c.best.n}/${c.total})`:'합의된 시간대 없음');
+  $('#edTitle').value=e.title;$('#edPlace').value=e.place||'';$('#edMemo').value=e.memo||'';
+  
+  fillDay($('#edDay'));fillTime($('#edStart'));fillTime($('#edEnd'));fillDur($('#edDur'));
+  $('#edDay').value=e.day!=null?e.day:(viewDay!=null?viewDay:0);
+  $('#edStart').value=e.start!=null?e.start:9;
+  $('#edDur').value=e.dur;syncEnd();
+  $('#edSw').innerHTML=COLORS.map(c2=>`<div class="sw" data-c="${c2}" style="background:${c2}" onclick="pickC('${c2}')"></div>`).join('');
+  markSw(e.color);
+  $('#edAdminBox').style.display=isAdmin?'block':'none';
+  $('#edType').value=e.type;
+  
+  // 🔥 [버그 픽스] 수정 가능 여부 판단 및 일반 사용자의 입력 필드 원천 차단
+  const editable=isAdmin||!e.locked;
+  ['edTitle','edPlace','edMemo','edDay','edStart','edEnd','edDur'].forEach(id=>{
+    $('#'+id).disabled = !editable;
+  });
+  
+  // 잠긴 일정은 색깔 변경 방지 및 [저장/내리기] 버튼 숨김
+  document.querySelectorAll('.sw').forEach(s => s.style.pointerEvents = editable ? 'auto' : 'none');
+  $('#edMove').style.display = editable ? 'block' : 'none';
+  $('#edSave').style.display = editable ? 'block' : 'none';
+  
+  $('#edMove').textContent=inTray?'올리기':'내리기';
+  $('#nUp').disabled=!editable||inTray;$('#nDown').disabled=!editable||inTray;
+  $('#edNudgeLb').textContent=inTray?'미배치 — 먼저 ▲올리기':(editable?'올리기 / 내리기 (15분 단위)':'🔒 시간 고정 — 관리자만 변경 가능');
+  $('#mEdit').classList.add('on');
+}
+function markSw(c){document.querySelectorAll('.sw').forEach(s=>s.classList.toggle('sel',s.dataset.c===c));}
+window.pickC=c=>{edColor=c;markSw(c);};
+$('#edStart').addEventListener('change',syncEnd);
+$('#edDur').addEventListener('change',syncEnd);
+$('#edEnd').addEventListener('change',syncDur);
+
+function nudge(delta){
+  if(!cur)return;
+  if(cur.locked&&!isAdmin)return toast('🔒 시간 고정 일정입니다');
+  if(cur.start==null)return toast('먼저 ▲올리기로 배치하세요');
+  const ns=+(cur.start+delta).toFixed(2);
+  if(ns<H0||ns+cur.dur>H1)return toast('시간표 범위를 벗어납니다');
+  const occ=occupied(cur.day,cur.id),a=idx(ns);
+  for(let i=a;i<a+Math.round(cur.dur/STEP);i++)if(occ[i])return toast('겹치는 일정이 있어요');
+  cur.start=ns;$('#edStart').value=ns;syncEnd();persist();render();toast(hhmm(ns)+'로 이동');}
+$('#nUp').onclick=()=>nudge(-STEP);
+$('#nDown').onclick=()=>nudge(STEP);
+$('#edMove').onclick=()=>{
+  if(cur.start==null){placeUp(cur);closeAll();}
+  else{if(cur.locked&&!isAdmin)return toast('🔒 고정 일정입니다');
+    cur.start=null;if(cur.type==='free')cur.day=null;persist();closeAll();render();toast('트레이로 내림');}};
+$('#edSave').onclick=()=>{
+  const t=$('#edTitle').value.trim();if(!t)return toast('이름을 입력하세요');
+  const d=+$('#edDay').value,s=+$('#edStart').value,du=+$('#edDur').value;
+  const placed=cur.start!=null;
+  if(placed&&(isAdmin||!cur.locked)){
+    if(s+du>H1)return toast('종료가 시간표를 넘습니다');
+    const occ=occupied(d,cur.id),a=idx(s);
+    for(let i=a;i<a+Math.round(du/STEP);i++)if(occ[i])return toast('겹치는 일정이 있어요');
+    cur.day=d;cur.start=s;cur.dur=du;
+  }else if(!placed&&cur.type!=='free'){cur.day=d;cur.dur=du;}
+  cur.title=t;cur.place=$('#edPlace').value.trim();cur.memo=$('#edMemo').value.trim();
+  cur.color=edColor;
+  if(isAdmin){
+    const nt=$('#edType').value;
+    if(nt!==cur.type){cur.type=nt;cur.locked=(nt==='fixed');
+      if(nt==='fixed'&&cur.start==null)placeUp(cur,true);
+      if(nt==='free')cur.locked=false;}
+    pushPlan();
+  }
+  persist();closeAll();render();toast('수정됨');
+};
+$('#edVote').onclick=()=>{if(!me)return toast('먼저 입장하세요');
+  const r=loadRoom(),m=r.members[me.name];m.votes=m.votes||[];
+  const i=m.votes.indexOf(cur.id);i<0?m.votes.push(cur.id):m.votes.splice(i,1);
+  saveRoom(r);render();toast(i<0?'👍 같이해요 투표됨':'투표 취소');};
+
+function myLayout(){return EV.map(e=>({id:e.id,day:e.day,start:e.start,locked:e.locked,
+  color:e.color,dur:e.dur}));}
+function persist(){if(!me)return;const r=loadRoom();
+  r.members[me.name]=Object.assign(r.members[me.name]||{},{layout:myLayout()});saveRoom(r);flashLive('저장됨');}
+$('#btnAuto').onclick=autoPlace;
+$('#btnLogin').onclick=()=>{if(me){$('#inRoom').value=room;$('#inName').value=me.name;$('#inPin').value=me.pin;
+  $('#logoutRow').style.display='flex';}$('#mLogin').classList.add('on');};
+$('#doLogout').onclick=()=>{localStorage.removeItem(SESSK);me=null;show.clear();
+  $('#whoBadge').textContent='게스트';$('#logoutRow').style.display='none';
+  $('#inName').value='';$('#inPin').value='';closeAll();render();toast('로그아웃');};
+function enter(n,p,rc,silent){
+  room=(rc||room).toUpperCase();const r=loadRoom();
+  if(r.members[n] && r.members[n].pin && r.members[n].pin !== p){
+    toast('PIN이 다릅니다'); return false;
+  }
+  me={name:n,pin:p};$('#whoBadge').textContent=n;
+  localStorage.setItem(SESSK,JSON.stringify({name:n,pin:p,room}));
+  if(!r.plan)r.plan=JSON.parse(JSON.stringify(EV));
+  applyRoomToEV();
+  r.members[n]=Object.assign({color:COLORS[Object.keys(r.members).length%COLORS.length],pin:p,votes:[]},
+    r.members[n]||{},{layout:myLayout()});
+  saveRoom(r);startSync();render();
+  if(!silent)toast('입장 · '+n);
+  return true;}
+$('#doLogin').onclick=()=>{const n=$('#inName').value.trim(),p=$('#inPin').value.trim(),rc=$('#inRoom').value.trim();
+  if(!n)return toast('닉네임을 입력하세요');
+  if(p.length > 0 && p.length !== 4)return toast('PIN은 4자리 숫자로 입력하거나 비워두세요');
+  if(enter(n,p,rc))closeAll();
+};
+
+$('#btnVote').onclick=()=>{const total=Object.keys(allMembers()).length||1;
+  $('#voteBody').innerHTML=EV.map(e=>{const c=consensus(e.id),v=votes(e.id),
+    pct=c.best?Math.round(c.best.n/c.total*100):0;
+    return `<div class="item"><i class="dot" style="background:${e.color}"></i><div>${esc(e.title)}
+      <small>👍 ${v}/${total}명 · ${c.best?DAYS[c.best.day]+' '+hhmm(c.best.start)+' 다수안 ('+pct+'%)':'합의 없음'}</small>
+      <div class="bar"><i style="width:${pct}%"></i></div></div></div>`;}).join('');
+  $('#mVote').classList.add('on');};
+$('#btnConsensus').onclick=()=>{let n=0;
+  EV.forEach(e=>{if(e.locked)return;const c=consensus(e.id);
+    if(c.best&&c.best.n>=2){e.day=c.best.day;e.start=c.best.start;n++;}});
+  persist();render();toast(n?n+'개를 다수안으로':'2명 이상 일치한 일정 없음');};
+
+$('#btnAdmin').onclick=()=>$('#mAdmin').classList.add('on');
+$('#doAdmin').onclick=()=>{if($('#inAdminPin').value!==ADMIN_PIN)return toast('PIN 오류');
+  isAdmin=true;$('#adminGate').style.display='none';$('#adminBody').style.display='block';
+  $('#whoBadge').textContent='관리자';$('#inTrip').value=TRIP;
+  fillDay($('#evDay'));fillTime($('#evStart'));fillTime($('#evEnd'));
+  $('#evStart').value=9;$('#evEnd').value=11;adminList();};
+$('#evStart').addEventListener('change',()=>{if(+$('#evEnd').value<=+$('#evStart').value)$('#evEnd').value=+$('#evStart').value+1;});
+$('#doTrip').onclick=()=>{const v=$('#inTrip').value.trim();if(!v)return toast('이름 입력');
+  TRIP=v;const r=loadRoom();r.trip=v;saveRoom(r);render();toast('여행 이름 변경됨');};
+function adminList(){$('#adminList').innerHTML=EV.map(e=>`<div class="item">
+  <i class="dot" style="background:${e.color}"></i>
+  <div>${esc(e.title)}${fixTag(e,true)}
+  <small>${e.day!=null?DAYS[e.day]:'-'} ${e.start!=null?hhmm(e.start)+'–'+hhmm(e.start+e.dur):'미배치'}</small></div>
+  <button onclick="cyc('${e.id}')">유형↻</button><button onclick="del('${e.id}')">🗑</button></div>`).join('');}
+window.cyc=id=>{const e=EV.find(x=>x.id===id);
+  e.type=e.type==='fixed'?'date':e.type==='date'?'free':'fixed';
+  e.locked=(e.type==='fixed');
+  if(e.type==='fixed'&&e.start==null)placeUp(e,true);
+  pushPlan();adminList();render();toast('→ '+(e.type==='fixed'?'날짜+시간 고정':e.type==='date'?'날짜 고정':'자유'));};
+window.del=id=>{EV=EV.filter(x=>x.id!==id);pushPlan();adminList();render();};
+function pushPlan(){const r=loadRoom();
+  r.plan=EV.map(e=>({id:e.id,title:e.title,place:e.place,memo:e.memo,type:e.type,
+    color:e.color,day:e.day,start:e.start,dur:e.dur,locked:e.locked}));
+  r.trip=TRIP;saveRoom(r);}
+$('#doAdd').onclick=()=>{const t=$('#evTitle').value.trim();if(!t)return toast('이름 입력');
+  const type=$('#evType').value,d=+$('#evDay').value,s=+$('#evStart').value,en=+$('#evEnd').value;
+  const dur=+(en-s).toFixed(2);if(dur<=0)return toast('종료가 시작보다 빨라요');
+  const e={id:'e'+Date.now(),title:t,place:$('#evPlace').value.trim(),memo:$('#evMemo').value.trim(),
+    type,dur,color:COLORS[EV.length%COLORS.length],
+    day:type==='free'?null:d,start:type==='fixed'?s:null,locked:type==='fixed'};
+  EV.push(e);if(type==='date'){const f=findSlot(d,dur,e.id);if(f!=null)e.start=f;}
+  ['evTitle','evPlace','evMemo'].forEach(i=>$('#'+i).value='');
+  pushPlan();adminList();render();toast('추가됨');};
+
+function closeAll(){document.querySelectorAll('.mask').forEach(m=>m.classList.remove('on'));}
+document.querySelectorAll('.mask').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)closeAll();}));
+
+init();
+(function boot(){try{const s=JSON.parse(localStorage.getItem(SESSK)||'null');
+  if(s&&s.name){enter(s.name,s.pin,s.room,true);return;}}catch(e){}
+  startSync();render();})();
+</script>
+</body>
+</html>
