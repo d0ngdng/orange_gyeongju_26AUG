@@ -307,7 +307,7 @@ function loadRoom(){try{return JSON.parse(localStorage.getItem(RK()))||{trip:TRI
 
 /* ══════ 동기화 (Supabase) ══════ */
 /* ▼▼▼ Supabase 프로젝트 설정: Project Settings → API 에서 URL / publishable key 복사해서 채우세요 ▼▼▼ */
-const SYNC={mode:'supabase',supabaseUrl:'https://YOUR-PROJECT-REF.supabase.co',supabaseKey:'YOUR-PUBLISHABLE-KEY'};
+  const SYNC={mode:'supabase',supabaseUrl:'https://qycgdqeftpvplkvyoooj.supabase.co',supabaseKey:'sb_publishable_YCNfqgoGy7tPw-_V-2SbdQ_Oa8IiWdF'};
 /* ▲▲▲ ------------------------------------------------------------------------------------- ▲▲▲ */
 let sb=null,sbPromise=null,sbChannel=null,sbChannelRoom=null,lastPushed='',pollTimer=null,pushT=null;
 const bc='BroadcastChannel'in window?new BroadcastChannel('triptable'):null;
