@@ -307,7 +307,7 @@ function loadRoom(){try{return JSON.parse(localStorage.getItem(RK()))||{trip:TRI
 
 /* ══════ 동기화 (Supabase) ══════ */
 /* ▼▼▼ Supabase 프로젝트 설정: Project Settings → API 에서 URL / publishable key 복사해서 채우세요 ▼▼▼ */
-const SYNC={mode:'supabase',supabaseUrl:'https://qycgdqeftpvplkvyoooj.supabase.co',supabaseKey:'sb_publishable_YCNfqgoGy7tPw-_V-2SbdQ_Oa8IiWdF'};
+const SYNC={mode:'supabase',supabaseUrl:'https://YOUR-PROJECT-REF.supabase.co',supabaseKey:'YOUR-PUBLISHABLE-KEY'};
 /* ▲▲▲ ------------------------------------------------------------------------------------- ▲▲▲ */
 let sb=null,sbPromise=null,sbChannel=null,sbChannelRoom=null,lastPushed='',pollTimer=null,pushT=null;
 const bc='BroadcastChannel'in window?new BroadcastChannel('triptable'):null;
@@ -813,8 +813,10 @@ $('#edSave').onclick=()=>{
   cur.title=t;cur.place=$('#edPlace').value.trim();cur.memo=$('#edMemo').value.trim();cur.color=edColor;
   if(isAdmin){const nt=$('#edType').value;
     if(nt!==cur.type){cur.type=nt;cur.locked=(nt==='fixed');
-      if(nt==='fixed'&&cur.start==null)placeUp(cur,true);}
-    pushPlan();}
+      if(nt==='fixed'&&cur.start==null)placeUp(cur,true);}}
+  // 제목/장소/메모는 모두가 공유하는 정보라 관리자 여부와 상관없이 항상 plan에 반영
+  // (여기서 빠지면 방금 적은 내용이 다음 동기화 때 서버의 옛 값으로 덮어써짐)
+  pushPlan();
   persist();closeAll();render();toast('저장됨');
 };
 
