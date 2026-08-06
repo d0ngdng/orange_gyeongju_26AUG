@@ -165,6 +165,7 @@ textarea{min-height:60px;resize:vertical;line-height:1.5}
 <!-- 로그인 -->
 <div class="mask" id="mLogin"><div class="sheet">
   <h2>방 참여 · 내 시간표</h2>
+
   <label>방 코드 (동행끼리 동일하게)</label><input id="inRoom" value="닉값팟">
   <div class="row">
     <div><label>닉네임</label><input id="inName" placeholder="예: 지현"></div>
@@ -307,7 +308,7 @@ function loadRoom(){try{return JSON.parse(localStorage.getItem(RK()))||{trip:TRI
 
 /* ══════ 동기화 (Supabase) ══════ */
 /* ▼▼▼ Supabase 프로젝트 설정: Project Settings → API 에서 URL / publishable key 복사해서 채우세요 ▼▼▼ */
-  const SYNC={mode:'supabase',supabaseUrl:'https://qycgdqeftpvplkvyoooj.supabase.co',supabaseKey:'sb_publishable_YCNfqgoGy7tPw-_V-2SbdQ_Oa8IiWdF'};
+ const SYNC={mode:'supabase',supabaseUrl:'https://qycgdqeftpvplkvyoooj.supabase.co',supabaseKey:'sb_publishable_YCNfqgoGy7tPw-_V-2SbdQ_Oa8IiWdF'};
 /* ▲▲▲ ------------------------------------------------------------------------------------- ▲▲▲ */
 let sb=null,sbPromise=null,sbChannel=null,sbChannelRoom=null,lastPushed='',pollTimer=null,pushT=null;
 const bc='BroadcastChannel'in window?new BroadcastChannel('triptable'):null;
