@@ -165,7 +165,6 @@ textarea{min-height:60px;resize:vertical;line-height:1.5}
 <!-- 로그인 -->
 <div class="mask" id="mLogin"><div class="sheet">
   <h2>방 참여 · 내 시간표</h2>
-
   <label>방 코드 (동행끼리 동일하게)</label><input id="inRoom" value="닉값팟">
   <div class="row">
     <div><label>닉네임</label><input id="inName" placeholder="예: 지현"></div>
@@ -672,6 +671,14 @@ $('#doNew').onclick=()=>{
 
 /* ══════ 드래그 (블록 이동 + 트레이 순서변경) ══════ */
 let drag=null,lpTimer=null;
+/* 터치로 블록을 탭해 시트를 여는 순간, 같은 탭에 대해 브라우저가 touchend 뒤에
+   mousedown→mouseup→click 순서로 호환 이벤트를 뒤늦게 한 번 더 만들어 보냄.
+   그런데 <select> 드롭다운은 보통 click이 아니라 그 앞의 mousedown에서 열리기 때문에
+   click만 막아서는 늦음 — mousedown/touchstart부터 같이 막아야 함. */
+let uiGuardUntil=0;
+function uiGuardBlock(e){if(Date.now()<uiGuardUntil){e.preventDefault();e.stopPropagation();}}
+['pointerdown','mousedown','touchstart','click'].forEach(t=>
+  document.addEventListener(t,uiGuardBlock,{capture:true,passive:false}));
 function bindDrag(el,ev,isBlock){
   el.addEventListener('touchmove', s => {
     if(drag && drag.armed) s.preventDefault();
@@ -738,6 +745,7 @@ function syncDur(){const s=+$('#edStart').value,e=+$('#edEnd').value;let d=+(e-s
     o.value=d;o.textContent=d<1?d*60+'분':d+'h';$('#edDur').appendChild(o);}
   $('#edDur').value=d;}
 function openEdit(e){
+  uiGuardUntil=Date.now()+400;
   cur=e;edColor=e.color;
   const c=consensus(e.id),w=sameSlotNames(e),inTray=e.start==null;
   $('#edHead').innerHTML=esc(e.title)+fixTag(e)+(inTray?' <small>(미배치)</small>':'');
